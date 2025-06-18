@@ -5,7 +5,7 @@ from scipy.optimize import minimize as scipy_minimize
 from pyomo.environ import *
 from cost_models import walruss_model
 
-def get_trader_best_response_scipy(game_dict, trader_strat, supply_strat, i):
+def get_trader_best_response_scipy(game_dict, trader_strat, supply_strat, i, symmetric=False):
     n, T = game_dict["n"], game_dict["T"]
     alpha, p_0 = game_dict["alpha"], game_dict["p_0"]
     Vs = game_dict["Vs"]
@@ -14,10 +14,16 @@ def get_trader_best_response_scipy(game_dict, trader_strat, supply_strat, i):
     def objective(demand):
         obj = 0
         for t in range(T):
-            obj += p_0 * demand[t]
-            for l in range(t+1):
-                total_demand = np.sum(trader_strat[:, l]) - trader_strat[i, l] + demand[l]
-                obj += alpha * (total_demand - supply_strat[l]) * demand[t]
+            if symmetric:
+                obj += p_0 * demand[t]
+                for l in range(t+1):
+                    obj += n*alpha*demand[t]*demand[l]
+                obj -= alpha*demand[t]*np.sum(supply_strat[:t+1]) 
+            else:
+                obj += p_0 * demand[t]
+                for l in range(t+1):
+                    total_demand = np.sum(trader_strat[:, l]) - trader_strat[i, l] + demand[l]
+                    obj += alpha * (total_demand - supply_strat[l]) * demand[t]
         return obj
 
     # Constraint: sum of demand == Vs[i]
@@ -108,7 +114,7 @@ def equilibrium_test():
     }
     supply = [1, 1, 1]
     
-    symmetric_opt = get_trader_best_response_pyomo(
+    symmetric_opt = get_trader_best_response_scipy(
         game_dict, 
         np.zeros(shape=(game_dict["n"], game_dict["T"])), 
         supply, 
@@ -126,7 +132,7 @@ def equilibrium_test():
     while True:
         update = False
         for i in range(n):
-            br_demand_i = get_trader_best_response_pyomo(game_dict, demand_matrix, supply, i)
+            br_demand_i = get_trader_best_response_scipy(game_dict, demand_matrix, supply, i)
             if np.linalg.norm(br_demand_i - demand_matrix[i]) >= 0.01:
                 demand_matrix[i] = br_demand_i
                 update = True
