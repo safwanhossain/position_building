@@ -189,7 +189,7 @@ def find_equilibrium_br():
         "T" :   T,
         "p_0" : 0,
         "Vs" : Vs,
-        "alpha" : alpha,
+        "alpha" : alpha/T,
         "beta" : beta
     }
 
