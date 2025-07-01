@@ -26,17 +26,39 @@ def chriss_model(demand_matrix, supply_vector, p_init, alpha=1, use_supply=False
     return temp_price_vector, permanent_price_vector, total_price_vector
 
 
-def walruss_model(demand_matrix, supply_vector, game_instance):
+def get_price_vector(game_instance, demand_matrix, supply_vector, i=None, demand_i=None):
+    """ Computing price is tricky and we need to do it multiple times for various objective/optimization.
+        They should all use this function and any changes should be reflected here.
+
+        If supply_i is set, we are essentially doing a best-response for i (hence it's handled seperately)
+    """
     n, T = game_instance["n"], game_instance["T"]
     p_init = game_instance["p_0"]
     alpha = game_instance["alpha"]
+    beta = game_instance["beta"]
     price_vector = np.zeros(T)
 
-    for t in range(0, T):
-        if t == 0:
-            price_vector[t] = p_init + alpha*(np.sum(demand_matrix[:,t]) - supply_vector[t])
+    # This is equivalent - kept here for reference
+    # for t in range(0, T):
+    #     if t == 0:
+    #         price_vector_walruss[t] = p_init + alpha*(np.sum(demand_matrix[:,t]) - supply_vector[t])
+    #     else:
+    #         price_vector_walruss[t] = price_vector_walruss[t-1] + alpha*(np.sum(demand_matrix[:,t]) - supply_vector[t])
+    #     price_vector[t] = price_vector_walruss[t] + beta*(np.sum(demand_matrix[:, t]) - supply_vector[t])
+
+    for t in range(T):
+        pt = p_init
+        for l in range(t+1):
+            if demand_i is not None:
+                pt += alpha*(np.sum(demand_matrix[:, l]) - demand_matrix[i,l] + demand_i[l] - supply_vector[l])
+            else:
+                pt += alpha*(np.sum(demand_matrix[:, l]) - supply_vector[l])
+
+        if demand_i is not None:
+            pt += beta*(np.sum(demand_matrix[:, t]) - demand_matrix[i, t] + demand_i[t] - supply_vector[t])
         else:
-            price_vector[t] = price_vector[t-1] + alpha*(np.sum(demand_matrix[:,t]) - supply_vector[t])
+            pt += beta*(np.sum(demand_matrix[:, t]) - supply_vector[t])
+        price_vector[t] = pt
     return price_vector
 
 
