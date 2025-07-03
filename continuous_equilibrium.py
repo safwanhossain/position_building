@@ -26,7 +26,8 @@ def get_overall_optimal_welfare(game_dict):
         demand.shape = (1, T)
         pts = get_price_vector(game_dict, demand, supply)
         last_step_walrus = pts[-1] - beta*(demand[0][T-1] - supply[T-1])
-        revenue = np.dot(pts, supply) - np.sum(supply)*last_step_walrus 
+        revenue = np.dot(pts, supply) - np.sum(supply)*last_step_walrus
+        print(f"Revenue: {revenue}")
         cost = np.dot(pts, demand[0])
         return -1*(revenue - cost)
     
