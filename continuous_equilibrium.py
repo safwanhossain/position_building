@@ -6,7 +6,8 @@ from pyomo.environ import *
 from cost_models import get_price_vector
 from tqdm import tqdm
 
-def get_overall_optimal_welfare(game_dict):
+
+def get_optimal_welfare(game_dict, supply):
     """ To verify, but I believe the optimal welfare setting can be thought of as a single buyer looking
     to buy \sum{V_i} position to minimize cost. And a single seller looking to maximize revenue.
     
@@ -17,94 +18,69 @@ def get_overall_optimal_welfare(game_dict):
     """
     n, T = game_dict["n"], game_dict["T"]
     alpha, beta, p_0 = game_dict["alpha"], game_dict["beta"], game_dict["p_0"]
-    v_total = sum(game_dict["Vs"])
-
-    # Objective function
-    def objective(strat):
-        supply = strat[0:T]
-        demand = strat[T:]
-        demand.shape = (1, T)
-        pts = get_price_vector(game_dict, demand, supply)
-        last_step_walrus = pts[-1] - beta*(demand[0][T-1] - supply[T-1])
-        revenue = np.dot(pts, supply) - np.sum(supply)*last_step_walrus
-        print(f"Revenue: {revenue}")
-        cost = np.dot(pts, demand[0])
-        return -1*(revenue - cost)
-    
-    # Constraint: sum of demand == Vs[i]
-    cons = ({
-        'type': 'eq',
-        'fun': lambda strat: np.sum(strat[T:]) - v_total
-    },
-    # {
-    #     'type': 'ineq',
-    #     'fun': lambda strat: v_total - np.sum(strat[0:T])
-    # }
-    )
-
-    # Bounds: demand >= 0
-    bounds = [(0, None) for _ in range(T*2)]
-
-    # Initial guess: split Vs[i] evenly
-    x0 = np.ones(T*2) * (v_total / T)
-    result = scipy_minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=cons)    
-    return result.x[:T], result.x[T:], -1*result.fun
-
-
-def get_seller_best_response(game_dict, trader_strat):
-    n, T = game_dict["n"], game_dict["T"]
-    alpha, beta, p_0 = game_dict["alpha"], game_dict["beta"], game_dict["p_0"]
     Vs = game_dict["Vs"]
-
-    # Objective function
-    def objective(supply):
-        pts = get_price_vector(game_dict, trader_strat, supply)
-        revenue = np.dot(pts, supply)
-        
-        last_step_walrus = pts[-1] - beta*(np.sum(trader_strat[:,T-1]) - supply[T-1])
-        return -1*revenue + np.sum(supply)*last_step_walrus
-        #return -1*revenue
-        #return -1*revenue + np.sum(supply)*last_step_walrus + beta*(np.sum(supply)**2)
+    reserve = game_dict["reserve"]
     
-    # Constraint: sum of demand == Vs[i]
-    cons = ({
-        'type': 'ineq',
-        'fun': lambda demand: np.sum(Vs) - np.sum(demand)
-    })
+    # Objective function
+    def objective(demand):
+        demand.shape = (n, T)
+        pts = get_price_vector(game_dict, demand, supply)
+        total_utility = 0
+        # TODO: We can vectorize these below if runtime becomes an issue here
+        if reserve:
+            total_utility = np.sum([reserve[i]*np.sum(demand[i]) - np.dot(pts, demand[i]) for i in range(n)])
+        else:
+            total_utility = -1*np.sum([np.dot(pts, demand[i]) for i in range(n)])
+            
+        # scipy default is to minimize - hence the negative
+        return -1*total_utility
+    
+    # Constraint: sum of demand == Vs[i] when no reserve; demand <= Vs[i] with reserve
+    cons = []
+    for i in range(n):
+        cons.append({
+            'type': 'eq' if not reserve else 'ineq',
+            'fun': lambda demand, i=i: Vs[i] - np.sum(demand[i*T:(i+1)*T])
+        })
+    
+    # No per-round bounds
+    bounds = [(None, None) for _ in range(n*T)]
 
-    # Bounds: demand >= 0
-    bounds = [(0, None) for _ in range(T)]
-
-    # Initial guess: split Vs[i] evenly
-    x0 = np.ones(T) * (Vs[0] / T)
-    result = scipy_minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=None)
-
-    if not result.success:
-        print("Scipy failed:", result.message)
-        return None
-    else:
-        return result.x
-
+    x0 = np.ones(n*T)
+    result = scipy_minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=cons)        
+    
+    # If we are not using reserve, then return the positive cost (lower better)
+    # Otherwise, return the utility (higher better)
+    return result.x.reshape((n,T)), result.fun if not reserve else -1*result.fun
+    
+        
 
 def get_buyer_best_response(game_dict, trader_strat, supply_strat, i):
-    n, T = game_dict["n"], game_dict["T"]
-    alpha, beta, p_0 = game_dict["alpha"], game_dict["beta"], game_dict["p_0"]
+    T = game_dict["T"]
     Vs = game_dict["Vs"]
+    reserve = game_dict["reserve"]
 
     # Objective function
     def objective(demand):
         pts = get_price_vector(game_dict, trader_strat, supply_strat, i, demand)
-        cost = np.dot(pts, demand)
-        return cost
+    
+        total_utility = 0
+        if reserve:
+            total_utility = np.sum(demand)*reserve[i] - np.dot(pts, demand)
+        else:
+            total_utility = -1*np.dot(pts, demand) 
+            
+        # scipy default is to minimize - hence the negative
+        return -1*total_utility
 
     # Constraint: sum of demand == Vs[i]
     cons = ({
-        'type': 'eq',
-        'fun': lambda demand: np.sum(demand) - Vs[i]
+        'type': 'eq' if not reserve else 'ineq',
+        'fun': lambda demand: Vs[i] - np.sum(demand)
     })
 
     # Bounds: demand >= 0
-    bounds = [(0, None) for _ in range(T)]
+    bounds = [(None, None) for _ in range(T)]
 
     # Initial guess: split Vs[i] evenly
     x0 = np.ones(T) * (Vs[i] / T)
@@ -126,10 +102,30 @@ def get_cost(game_dict, demand_matrix, supply):
     return price_vector, total_costs
    
 
-def find_equilibrium_br(game_dict, supply_player=True, verbose=True, get_welfare=True):
+def verify_equilibrium(game_dict, demand_matrix, supply):
+    """ Verify whether a given set of strategies at at an equilibrium
+    """
+    n, T, Vs = game_dict["n"], game_dict["T"], game_dict["Vs"]
+
+    price_vector, total_cost = get_cost(game_dict, demand_matrix, supply)
+    print(f"The total cost of current strategy is: {total_cost}")
+
+    # check the best response for each of the buyers
+    eps = 0.01
+    for i in range(n):
+        br_demand_i = get_buyer_best_response(game_dict, demand_matrix, supply, i)
+        step_size = np.linalg.norm(br_demand_i - demand_matrix[i]) 
+        if step_size >= eps:
+            print(f"Agent {i} best responds with: {br_demand_i}")
+            return False
+
+    return True
+
+
+def find_equilibrium_br(game_dict, supply, verbose=True, get_welfare=True):
     # Initialize supply
     n, T, Vs = game_dict["n"], game_dict["T"], game_dict["Vs"]
-    supply = [0 for i in range(T)]
+    reserve = game_dict["reserve"]
 
     # create an initial demand matrix where everyone buys the whole order up-front.
     demand_matrix = np.zeros((n, T))
@@ -150,14 +146,6 @@ def find_equilibrium_br(game_dict, supply_player=True, verbose=True, get_welfare
                 update = True
             step_sizes.append(step_size)
 
-        if supply_player:
-            br_supply = get_seller_best_response(game_dict, demand_matrix)
-            step_size = np.linalg.norm(br_supply - supply) 
-            if step_size >= eps:
-                supply = br_supply
-                update = True
-            step_sizes.append(step_size)
-
         iter += 1
         print(f"Iter: {iter} with the largest step size being: {max(step_sizes)}") if verbose else None
         
@@ -173,18 +161,20 @@ def find_equilibrium_br(game_dict, supply_player=True, verbose=True, get_welfare
         price_vector, total_cost = get_cost(game_dict, demand_matrix, supply)
         revenue = np.dot(price_vector, supply)
 
-        print(f"The equilibrium supply is: {supply}\n") if verbose else None
-        print(f"The equilibrium demand matrix is: {demand_matrix}\n") if verbose else None
+        print(f"The equilibrium demand matrix is: {demand_matrix}") if verbose else None
         print(f"This leads to price {price_vector}") if verbose else None
         print(f"The cost to each trader is: {total_cost}") if verbose else None
         print(f"The total cost is: {sum(total_cost)}") if verbose else None
-        print(f"The revenue is: {revenue}") if verbose else None
-
+    
         if get_welfare:
-            eq_welfare = revenue - sum(total_cost)
-            supply_welf, demand_welf, opt_welfare = get_overall_optimal_welfare(game_dict) 
+            if reserve:
+                eq_welfare = np.sum([reserve[i]*np.sum(demand_matrix[i]) - np.dot(price_vector, demand_matrix[i]) for i in range(n)])
+            else:
+                eq_welfare = sum(total_cost)
+            demand_welf, opt_welfare = get_optimal_welfare(game_dict, supply)
+            price_opt_welfare, _ = get_cost(game_dict, demand_welf, supply) 
             print(f"\n\n The welfare of Equilibrium is: {eq_welfare}")
-            print(f"The optimal welfare is: {opt_welfare} with supply: {supply_welf} and demand: {demand_welf}") 
+            print(f"The optimal welfare is: {opt_welfare} with demand: {demand_welf} and prices: {price_opt_welfare}") 
     else:
         print(f"Equilibrium not found in {max_iter} iterations.")
         print(f"Demand matrix: {demand_matrix}")
@@ -203,10 +193,11 @@ def check_random_equilibrium(n, T, alpha, beta):
             "p_0" : 0,
             "Vs" : Vs,
             "alpha" : alpha/T,
-            "beta" : beta
+            "beta" : beta,
+            "reserve" : None
         }
         found, _, _ = find_equilibrium_br(game_dict, supply_player=True, verbose=False)
-        supply_eq, demand_eq, opt_welfare = get_overall_optimal_welfare(game_dict)
+        supply_eq, demand_eq, opt_welfare = get_optimal_welfare(game_dict)
         
         if not found:
             print(Vs)
@@ -222,37 +213,37 @@ def best_response_test():
         "beta" : beta,
         "p_0" : 0,
         "Vs" : Vs,
-        "alpha" : alpha/T
+        "alpha" : alpha/T,
+        "reserve" : [5, 5]
     }
     
     supply = [0, 0, 0]
     demand_matrix = np.array([
-        [2, 2],
-        [1, 1]
+        [5, 5],
+        [1, 9]
     ])
-
-    br_supply = get_seller_best_response(game_dict, demand_matrix)
-    price_vector, total_cost = get_cost(game_dict, demand_matrix, br_supply)
-    revenue = np.dot(price_vector, br_supply)
-    print(f"The demand is: {demand_matrix}")
-    print(f"The br supply is: {br_supply}")
-    print(f"The price is: {price_vector}")
-    print(f"The revenue in br_supply is: {revenue}") 
+    best_response = get_buyer_best_response(game_dict, demand_matrix, supply, 0)
+    print(f"Player 0 best response is: {best_response}")
 
 
 if __name__ == "__main__":
-    n, T, alpha, beta = 2, 2, 1, 1
-    Vs = [10 for i in range(n)]
+    n, T, alpha, beta = 3, 10, 3, 1
+    Vs = [5,10, 15]
     game_dict = {
         "n" :   n,
         "T" :   T,
-        "p_0" : 0,
+        "p_0" : 5,
         "Vs" : Vs,
         "alpha" : alpha/T,
-        "beta" : beta
+        "beta" : beta,
+        "reserve" : None
     }
+    supply = [1 for i in range(T)]
+    #demand, obj = get_overall_optimal_welfare(game_dict, supply)
+    #print(f"The demand is: {demand}, obj is: {obj}")
+    
     #best_response_test()
-    find_equilibrium_br(game_dict, get_welfare=True, verbose=True)
+    find_equilibrium_br(game_dict, supply, get_welfare=True, verbose=True)
     #check_random_equilibrium(3, 4, 1, 1)
 
     

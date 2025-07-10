@@ -30,7 +30,7 @@ def get_price_vector(game_instance, demand_matrix, supply_vector, i=None, demand
     """ Computing price is tricky and we need to do it multiple times for various objective/optimization.
         They should all use this function and any changes should be reflected here.
 
-        If supply_i is set, we are essentially doing a best-response for i (hence it's handled seperately)
+        If demand_i is set, we are essentially doing a best-response for i (hence it's handled seperately)
     """
     n, T = game_instance["n"], game_instance["T"]
     p_init = game_instance["p_0"]

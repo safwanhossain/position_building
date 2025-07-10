@@ -1,6 +1,43 @@
 from pyomo.environ import *
 import numpy as np
 
+def get_seller_best_response(game_dict, trader_strat):
+    """ the utility is the revenue made in selling shares minus the cost need to rebuild that 
+        position at the last price
+    """
+    print(trader_strat)
+    n, T = game_dict["n"], game_dict["T"]
+    alpha, beta, p_0 = game_dict["alpha"], game_dict["beta"], game_dict["p_0"]
+    Vs = game_dict["Vs"]
+
+    # Objective function
+    def objective(supply):
+        pts = get_price_vector(game_dict, trader_strat, supply)
+        revenue = np.dot(pts, supply)
+        
+        last_step_walrus = pts[-1] - beta*(np.sum(trader_strat[:,T-1]) - supply[T-1])
+        #return -1*revenue + np.sum(supply)*last_step_walrus + 0.5*np.sum(supply)**2
+        return -1*revenue 
+    
+    # Constraint: sum of demand == Vs[i]
+    cons = ({
+        'type': 'ineq',
+        'fun': lambda demand: np.sum(Vs) - np.sum(demand)
+    })
+
+    # Bounds: demand >= 0
+    bounds = [(0, None) for _ in range(T)]
+
+    # Initial guess: split Vs[i] evenly
+    x0 = np.ones(T) * (Vs[0] / T)
+    result = scipy_minimize(objective, x0, method='SLSQP', bounds=bounds, constraints=None)
+
+    if not result.success:
+        print("Scipy failed:", result.message)
+        return None
+    else:
+        return result.x
+
 def get_buyer_best_response_pyomo(game_dict, trader_strat, supply_strat, i, symmetric=False):
     n, T = game_dict["n"], game_dict["T"]
     alpha, beta,  p_0 = game_dict["alpha"], game_dict["beta"], game_dict["p_0"]
