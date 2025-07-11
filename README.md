@@ -1,4 +1,4 @@
-# Code for Optimial Position_Building
+# Code for Optimial Position Building
 
 ## main.py
 Contains algorithms for computing best response and equilibrium.

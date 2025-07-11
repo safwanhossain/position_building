@@ -8,8 +8,7 @@ from tqdm import tqdm
 
 
 def get_optimal_welfare(game_dict, supply):
-    """ To verify, but I believe the optimal welfare setting can be thought of as a single buyer looking
-    to buy \sum{V_i} position to minimize cost. And a single seller looking to maximize revenue.
+    """ Computes the joint strategy that maximizes the cumulative welfare of all buyers.
     
     Notes: If we contrain the supply to be less than total demand or don't consider value of final position - opt welfare is 0
            If we constraint the supply to be less than toal demand, then opt welfare is 0, even with final position utiliyt
@@ -173,8 +172,12 @@ def find_equilibrium_br(game_dict, supply, verbose=True, get_welfare=True):
                 eq_welfare = sum(total_cost)
             demand_welf, opt_welfare = get_optimal_welfare(game_dict, supply)
             price_opt_welfare, _ = get_cost(game_dict, demand_welf, supply) 
-            print(f"\n\n The welfare of Equilibrium is: {eq_welfare}")
-            print(f"The optimal welfare is: {opt_welfare} with demand: {demand_welf} and prices: {price_opt_welfare}") 
+            if reserve:
+                print(f"\n\n The utility (higher better) of Equilibrium is: {eq_welfare}")
+                print(f"The optimal cum utility is: {opt_welfare} with demand: {demand_welf} and prices: {price_opt_welfare}") 
+            else:
+                print(f"\n\n The total cost (lower better) of Equilibrium is: {eq_welfare}")
+                print(f"The optimal cum cost is: {opt_welfare} with demand: {demand_welf} and prices: {price_opt_welfare}") 
     else:
         print(f"Equilibrium not found in {max_iter} iterations.")
         print(f"Demand matrix: {demand_matrix}")
@@ -227,8 +230,8 @@ def best_response_test():
 
 
 if __name__ == "__main__":
-    n, T, alpha, beta = 3, 10, 3, 1
-    Vs = [5,10, 15]
+    n, T, alpha, beta = 3, 5, 3, 1
+    Vs = [5, 10, 15]
     game_dict = {
         "n" :   n,
         "T" :   T,
@@ -236,7 +239,7 @@ if __name__ == "__main__":
         "Vs" : Vs,
         "alpha" : alpha/T,
         "beta" : beta,
-        "reserve" : None
+        "reserve" : [5, 5, 6]
     }
     supply = [1 for i in range(T)]
     #demand, obj = get_overall_optimal_welfare(game_dict, supply)
