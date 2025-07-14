@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from continuous_equilibrium import find_equilibrium_br
+from main import find_equilibrium_br
 
 def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True, ylabel=False):
     """
@@ -20,7 +20,7 @@ def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True
         supply_player: Boolean indicating whether supply is a player
     """
     n, T = game_dict["n"], game_dict["T"]
-    alpha, beta = game_dict["alpha"], game_dict["beta"]
+    alpha, beta, exp = game_dict["alpha"], game_dict["beta"], game_dict["exp"]
     time_steps = list(range(T))
     
     # Custom color palette
@@ -51,20 +51,20 @@ def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True
    
     if cumulative:
         if ylabel:
-            ax.set_ylabel('Cumulative Position', fontsize=10)
-        title = f'α={alpha}, β={beta} Cumulative Position'
+            ax.set_ylabel('Cum Position', fontsize=10)
+        title = f'exp:{exp} Cumulative Position'
     else:
         if ylabel:
             ax.set_ylabel('Order', fontsize=10)
-        title = f'α={alpha}, β={beta} Orders'
+        title = f'α={alpha}, β={beta}, exp: {exp} Orders'
 
     ax.set_title(title, fontsize=11)
     ax.legend(fontsize=8)
     ax.set_ylim(-1, 18)
-    ax.set_yticks(np.linspace(0, 16, 6))
+    ax.set_yticks(np.linspace(0, 16, 9))
     ax.set_xticks(np.linspace(0, T-1, T))
 
-def run_sweep(game_dict, alpha_range, beta_range, supply_player=True):
+def run_sweep_alpha_beta(game_dict, alpha_range, beta_range, supply_player=True):
     n, T = game_dict["n"], game_dict["T"]
     p_0 = game_dict["p_0"]
     Vs = game_dict["Vs"]
@@ -89,18 +89,38 @@ def run_sweep(game_dict, alpha_range, beta_range, supply_player=True):
     plt.show()
 
 
-if __name__ == "__main__":
-    n, T = 3, 5
-    Vs = [8, 12, 14]
+def run_sweep_exp(game_dict, exp_range):
+    n, T = game_dict["n"], game_dict["T"]
+    p_0 = game_dict["p_0"]
+    Vs = game_dict["Vs"]
+    supply = game_dict["supply"]
+
+    fig1, axes1 = plt.subplots(1, len(exp_range), figsize=(22, 8), sharex=True, sharey=True)
+    for i, exp in enumerate(exp_range):
+        game_dict["exp"] = exp
+        found, demand_matrix_eq, _ = find_equilibrium_br(game_dict, supply, get_welfare=False)
+        plot_positions_subplot(axes1[i], game_dict, demand_matrix_eq, supply, ylabel=True if i == 0 else False) 
     
-    beta_range = [1]
-    alpha_range = [0.5, 1.5, 3]    
+    fig1.suptitle(f'n={n}, T={T}, Vs={Vs}, p_0={p_0}, exp:{exp_range}', fontsize=16)
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    n, T, alpha, beta = 2, 5, 3, 1
+    Vs = [12, 15]
+    supply = [0 for i in range(T)]
     game_dict = {
         "n" :   n,
         "T" :   T,
-        "p_0" : 0,
+        "p_0" : 5,
         "Vs" : Vs,
-        "alpha" : 0,
-        "beta" : 0
+        "alpha" : alpha/T,
+        "beta" : beta,
+        "reserve" : None,
+        "exp" : 1,
+        "supply" : supply
     }
-    run_sweep(game_dict, alpha_range, beta_range, supply_player=False)
+    exp_range = [0.3, 0.5, 0.75, 0.95, 1]
+    
+    run_sweep_exp(game_dict, exp_range)

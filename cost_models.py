@@ -26,18 +26,20 @@ def chriss_model(demand_matrix, supply_vector, p_init, alpha=1, use_supply=False
     return temp_price_vector, permanent_price_vector, total_price_vector
 
 
-def get_price_vector(game_instance, demand_matrix, supply_vector, i=None, demand_i=None):
+def get_price_vector(game_instance, demand_matrix, i=None, demand_i=None):
     """ Computing price is tricky and we need to do it multiple times for various objective/optimization.
         They should all use this function and any changes should be reflected here.
 
         If demand_i is set, we are essentially doing a best-response for i (hence it's handled seperately)
     """
     n, T = game_instance["n"], game_instance["T"]
+    supply_vector = game_instance["supply"]
     p_init = game_instance["p_0"]
     alpha = game_instance["alpha"]
     beta = game_instance["beta"]
     price_vector = np.zeros(T)
-
+    perm_price_vector = np.zeros(T)
+    
     # This is equivalent - kept here for reference
     # for t in range(0, T):
     #     if t == 0:
@@ -46,6 +48,8 @@ def get_price_vector(game_instance, demand_matrix, supply_vector, i=None, demand
     #         price_vector_walruss[t] = price_vector_walruss[t-1] + alpha*(np.sum(demand_matrix[:,t]) - supply_vector[t])
     #     price_vector[t] = price_vector_walruss[t] + beta*(np.sum(demand_matrix[:, t]) - supply_vector[t])
 
+    exp = game_instance["exp"]
+    
     for t in range(T):
         pt = p_init
         for l in range(t+1):
@@ -55,11 +59,20 @@ def get_price_vector(game_instance, demand_matrix, supply_vector, i=None, demand
                 pt += alpha*(np.sum(demand_matrix[:, l]) - supply_vector[l])
 
         if demand_i is not None:
-            pt += beta*(np.sum(demand_matrix[:, t]) - demand_matrix[i, t] + demand_i[t] - supply_vector[t])
+            net_demand = np.sum(demand_matrix[:, t]) - demand_matrix[i, t] + demand_i[t] - supply_vector[t]
         else:
-            pt += beta*(np.sum(demand_matrix[:, t]) - supply_vector[t])
+            net_demand = np.sum(demand_matrix[:, t]) - supply_vector[t] 
+        
+        # Even though the general expression is equivalent to the exp=1 expression when exp=1, I write them seperately
+        # since the inclusion of abs leads to SLSQP optimizer complaining.
+        perm_price_vector[t] = pt
+        if exp == 1:
+            pt += beta*net_demand
+        else:
+            pt += beta*np.sign(net_demand)*(np.abs(net_demand)**exp)
         price_vector[t] = pt
-    return price_vector
+
+    return price_vector, perm_price_vector
 
 
 def test_random_data():
