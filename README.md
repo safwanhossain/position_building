@@ -11,3 +11,6 @@ Old code that may be useful at some point later. Safely ignore
 
 ## plots.py
 For generating plots.
+
+## spne.py
+Algorithm to compute SPNE in the Markovian game
