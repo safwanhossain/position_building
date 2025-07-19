@@ -39,11 +39,9 @@ def project_feasible_analytical(game_dict, z):
     n, T = game_dict["n"], game_dict["T"]
     Vs = game_dict["Vs"]
     H = z.reshape((n,T))
-
-    for i in range(n):
-        total_i = np.sum(H[i]) 
-        if total_i >= Vs[i]:
-            H[i] -= (Vs[i] - total_i)/T
+ 
+    offset = np.maximum(np.sum(H, axis=1) - Vs, np.zeros(n)) / T
+    H -= offset[:, None]
     return H.flatten()
 
 
@@ -119,10 +117,9 @@ def extra_gradient_equilibrium(game_dict, eta=None):
      
 
 if __name__ == "__main__":
-    n, T, alpha, beta = 20, 100, 2, 1
+    n, T, alpha, beta = 15, 500, 2, 1
     Vs = [20 for i in range(n)]
     reserve = [5 for i in range(n)]
-    #supply = [1, 2, 3]
     supply = [0 for i in range(T)]
 
     game_dict = {

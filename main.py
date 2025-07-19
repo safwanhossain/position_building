@@ -334,10 +334,10 @@ def price_of_anarchy():
     print(f"The PPoA is: {opt_welfare_alg/eq_welfare}")
 
 if __name__ == "__main__":
-    n, T, alpha, beta = 2, 3, 2, 1
+    n, T, alpha, beta = 2, 5, 2, 1
     Vs = [10, 20]
     reserve = [3, 5]
-    supply = [1, 2, 3]
+    supply = [1,2,3,4,5]
     #supply = [0, 0, 0]
 
     game_dict = {
