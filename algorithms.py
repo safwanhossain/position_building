@@ -93,11 +93,12 @@ def extra_gradient_equilibrium(game_dict, eta=None):
     """
     eps = 0.0001
     n, T, Vs = game_dict["n"], game_dict["T"], game_dict["Vs"]
+    alpha, beta = game_dict["alpha"], game_dict["beta"]
     M, b = get_linear_operator(game_dict)
     initial_guess = np.concatenate([[Vs[i]/T for t in range(T)] for i in range(n)])
     L = (n*T + 1)*alpha + (n+1)*beta
     if eta is None:
-        eta = 0.9/L
+        eta = 0.98/L
     else:
         assert eta <= 1/L
         

@@ -1,9 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from main import find_equilibrium_br
+from main import find_equilibrium_br, get_cost
+from algorithms import extra_gradient_equilibrium
 
-def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True, ylabel=False):
+def plot_positions_subplot(ax, game_dict, demand_matrix, cumulative=True, ylabel=False):
     """
     Plot the cumulative positions for all buyers and supplier on a axis.
     
@@ -21,6 +22,7 @@ def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True
     """
     n, T = game_dict["n"], game_dict["T"]
     alpha, beta, exp = game_dict["alpha"], game_dict["beta"], game_dict["exp"]
+    supply = game_dict["supply"]
     time_steps = list(range(T))
     
     # Custom color palette
@@ -32,14 +34,21 @@ def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True
     
     # Calculate cumulative positions for each buyer
     for i in range(n):
-        cumulative_demand = np.cumsum(demand_matrix[i])
-        ax.plot(time_steps, cumulative_demand, 
-                linewidth=1.5, markersize=4, alpha=trader_opacities[i],
-                color=trader_color, 
-                label=f'Buyer {i+1}')
+        if cumulative:
+            cumulative_demand = np.cumsum(demand_matrix[i])
+            ax.plot(time_steps, cumulative_demand, 
+                    linewidth=1.5, markersize=4, alpha=trader_opacities[i],
+                    color=trader_color, 
+                    label=f'Buyer {i+1}')
+        else:
+            ax.plot(time_steps, demand_matrix[i], 
+                    linewidth=1.5, markersize=4, alpha=trader_opacities[i],
+                    color='tab:red', 
+                    label=f'Buyer {i+1}')
+       
     
     # Calculate cumulative supply
-    if supply:
+    if np.sum(supply) != 0:
         cumulative_supply = np.cumsum(supply)
         ax.plot(time_steps, cumulative_supply, 
                 linewidth=1.5, markersize=4,
@@ -51,12 +60,11 @@ def plot_positions_subplot(ax, game_dict, demand_matrix, supply, cumulative=True
    
     if cumulative:
         if ylabel:
-            ax.set_ylabel('Cum Position', fontsize=10)
-        title = f'exp:{exp} Cumulative Position'
+            ax.set_ylabel('Cumulative Position', fontsize=10)
     else:
         if ylabel:
             ax.set_ylabel('Order', fontsize=10)
-        title = f'α={alpha}, β={beta}, exp: {exp} Orders'
+    title = f'β={beta}, exp: {exp}'
 
     ax.set_title(title, fontsize=11)
     ax.legend(fontsize=8)
@@ -89,38 +97,171 @@ def run_sweep_alpha_beta(game_dict, alpha_range, beta_range, supply_player=True)
     plt.show()
 
 
-def run_sweep_exp(game_dict, exp_range):
+def run_sweep_exp(game_dict, beta_range, exp_range):
     n, T = game_dict["n"], game_dict["T"]
     p_0 = game_dict["p_0"]
     Vs = game_dict["Vs"]
-    supply = game_dict["supply"]
 
-    fig1, axes1 = plt.subplots(1, len(exp_range), figsize=(22, 8), sharex=True, sharey=True)
-    for i, exp in enumerate(exp_range):
-        game_dict["exp"] = exp
-        found, demand_matrix_eq, _ = find_equilibrium_br(game_dict, supply, get_welfare=False)
-        plot_positions_subplot(axes1[i], game_dict, demand_matrix_eq, supply, ylabel=True if i == 0 else False) 
+    #fig1, axes1 = plt.subplots(len(beta_range), len(exp_range), figsize=(22, 8), sharex=True, sharey=True)
+    fig1, axes1 = plt.subplots(1, len(beta_range), figsize=(22, 8), sharex=True, sharey=True)
+    for i, beta in enumerate(beta_range):
+        for j, exp in enumerate(exp_range):
+            game_dict["exp"] = exp
+            game_dict["beta"] = beta
+            found, demand_matrix_eq, _ = find_equilibrium_br(game_dict, get_welfare=False)
+            plot_positions_subplot(axes1[i], game_dict, demand_matrix_eq, cumulative=True, ylabel=True) 
     
-    fig1.suptitle(f'n={n}, T={T}, Vs={Vs}, p_0={p_0}, exp:{exp_range}', fontsize=16)
+    fig1.suptitle(f'n={n}, T={T}, Vs={Vs}, p_0={p_0}, exp:{exp_range}, beta:{beta_range}', fontsize=16)
     plt.tight_layout()
     plt.show()
 
+def plot_equilibrium_strategies(game_dict, demand_matrix, supply):
+    """
+    Plot the equilibrium strategies showing:
+    1. Individual player strategies over time
+    2. Cumulative positions for each player
+    3. Supply over time
+    4. Price evolution over time (with reserve prices)
+    """
+    discretization, cont_time_interval = game_dict["discretization"], game_dict["cont_time_interval"]
+    n, T = game_dict["n"], game_dict["T"]
+    alpha, beta, p_0 = game_dict["alpha"], game_dict["beta"], game_dict["p_0"]
+    Vs = game_dict["Vs"]
+    reserve = game_dict["reserve"]
+    
+    # Get price vector
+    price_vector, perm_price_vector, total_cost = get_cost(game_dict, demand_matrix)
+    
+    # Create figure with subplots
+    fig, axes = plt.subplots(2, 2, figsize=(15, 8.5))
+    time_steps = np.arange(T)
+    
+    # Color palette for players
+    colors = ['blue', 'green', 'red', 'orange', 'purple', 'brown', 'pink', 'gray']
+    
+    # 1. Individual player strategies (orders per time step)
+    ax1 = axes[0, 0]
+    for i in range(n):
+        ax1.plot(time_steps, demand_matrix[i], linewidth=2,
+            color=colors[i % len(colors)],
+            label=(f'Player {i} (V={Vs[i]}, R={reserve[i]})')
+        )
+    ax1.plot(time_steps, supply, linewidth=2, linestyle=":", color=colors[-1], label="Supply")
+    ax1.set_xlabel('Time Steps')
+    ax1.set_ylabel('Order Size')
+    ax1.set_title('Player Orders at Equi')
+    ax1.legend()
+    ticks = np.arange(0, (cont_time_interval+1) * discretization, discretization)
+    print(ticks)
+    ax1.set_xticks(ticks)
+    ax1.set_xticklabels((ticks // discretization).astype(int))
+    ax1.grid(True, alpha=0.3)
+    
+    # 2. Cumulative positions (with alternating plotting order)
+    ax2 = axes[0, 1]
+    cumulative_demand_matrix = np.cumsum(demand_matrix, axis=1)
+    cumulative_supply = np.cumsum(supply)
+    for i in range(n):
+        ax2.plot(time_steps, cumulative_demand_matrix[i], linewidth=2,
+            color=colors[i % len(colors)],
+            label=(f'Player {i} (V={Vs[i]}, R={reserve[i]})')
+        )
+    ax2.plot(time_steps, cumulative_supply, linewidth=2, linestyle=":", color=colors[-1], label="Cumulative Supply")
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('Cumulative Position')
+    ax2.set_title('Player Cumulative Pos at Equi')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xticks(ticks)
+    ax2.set_xticklabels((ticks // discretization).astype(int))
+
+    # Plot costs
+    ax3 = axes[1, 0]
+    # Elementwise multiply each row of demand_matrix by price_vector
+    costs_per_step = demand_matrix * price_vector  # shape (n, T)
+
+    # Cumulative sum along time axis (axis=1)
+    cost_matrix = np.cumsum(costs_per_step, axis=1)  # shape (n, T)
+    for i in range(n):
+        ax3.plot(time_steps, cost_matrix[i], linewidth=2,
+            color=colors[i % len(colors)],
+            label=(f'Player {i} (V={Vs[i]}, R={reserve[i]})')
+        )
+    ax3.set_xlabel('Time')
+    ax3.set_ylabel('Cumulative cost upto t')
+    ax3.set_title('Cumulative Costs')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    ax3.set_xticks(ticks)
+    ax3.set_xticklabels((ticks // discretization).astype(int))
+
+    # 4. Price evolution (with reserve prices)
+    price_delta = price_vector
+    perm_price_delta = perm_price_vector
+    ax4 = axes[1, 1]
+    ax4.plot(time_steps, price_delta, linewidth=2, color=colors[-2], label=r'Exec Price: $p_t - p_0$')
+    ax4.plot(time_steps, perm_price_delta, linewidth=2, color=colors[-3], label=r'Perm Price: $p_t^w - p_0$')
+  
+    # Plot each player's reserve price if available
+    # if reserve is not None:
+    #     for i in range(n):
+    #         ax4.axhline(y=reserve[i], color=colors[i + 2], linestyle=':', alpha=0.8,
+    #                     label=f'Reserve {i} ({reserve[i]}) - p_0')
+    ax4.set_xlabel('Time')
+    ax4.set_ylabel('Price')
+    ax4.set_title(rf'Price Evolution; Reserve {reserve}; $p_0=${p_0}')
+    ax4.legend()
+    ax4.set_xticks(ticks)
+    ax4.set_xticklabels((ticks // discretization).astype(int))
+    ax4.grid(True, alpha=0.3)
+    
+    # Add overall title
+    fig.suptitle(f'Equilibrium Analysis: n:{n}, Discretization steps: {discretization}, Cont time: {cont_time_interval}, T: {discretization}*{cont_time_interval}, α={alpha}, β={beta/discretization}*{discretization})', 
+                 fontsize=16, fontweight='bold')
+    
+    plt.tight_layout()
+    plt.show()
+    
+    # Print summary statistics
+    print(f"\n=== EQUILIBRIUM SUMMARY ===")
+    print(f"Game Parameters: α={alpha:.2f}, β={beta:.2f}, T={T}, n={n}")
+    print(f"Initial Price: {p_0}")
+    print(f"Target Values (Vs): {Vs}")
+    print(f"Total Supply: {np.sum(supply):.2f}")
+    print(f"Average Price: {np.mean(price_vector):.4f}")
+    print(f"Price Range: {np.min(price_vector):.4f} - {np.max(price_vector):.4f}")
+    print(f"The total cost paid by all agents is: {total_cost}")
+    for i in range(n):
+        total_bought = np.sum(demand_matrix[i])
+        shortfall = Vs[i] - total_bought
+        percentage = (total_bought / Vs[i]) * 100 if Vs[i] > 0 else 0
+        print(f"Player {i}: Bought {total_bought:.4f}/{Vs[i]} ({percentage:.1f}%)")
+
 
 if __name__ == "__main__":
-    n, T, alpha, beta = 2, 5, 3, 1
-    Vs = [12, 15]
-    supply = [0 for i in range(T)]
+    discretization = 500
+    cont_time_interval = 10
+    n, alpha, beta = 5, 0.1, 0.1
+    T = discretization*cont_time_interval
+    Vs = [10, 15, 20, 25, 30]
+    reserve = [3, 3.5, 4, 4.5, 5]
+    supply = np.array([x * sum(Vs) / sum(np.exp(np.linspace(0, -1, T))) for x in np.exp(np.linspace(0, 3, T))])*0.02
+
     game_dict = {
+        "discretization" : discretization,
+        "cont_time_interval" : cont_time_interval,
         "n" :   n,
         "T" :   T,
-        "p_0" : 5,
+        "p_0" : 2.0,
         "Vs" : Vs,
-        "alpha" : alpha/T,
-        "beta" : beta,
-        "reserve" : None,
-        "exp" : 1,
-        "supply" : supply
+        "alpha" : alpha,
+        "beta" : beta*discretization,
+        "supply" : supply,
+        "reserve" : reserve,
+        "exp" : 1
     }
-    exp_range = [0.3, 0.5, 0.75, 0.95, 1]
-    
-    run_sweep_exp(game_dict, exp_range)
+        
+    demand_matrix = extra_gradient_equilibrium(game_dict)
+    print(demand_matrix)
+    plot_equilibrium_strategies(game_dict, demand_matrix, supply)
+
