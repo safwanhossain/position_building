@@ -63,9 +63,10 @@ class FTL:
 
     def get_initial_action(self):
         """Returns a random set of actions for the first round in a context."""
-        random_actions = np.random.rand(self.T)
-        if np.sum(random_actions) > 0:
-            return (self.V / np.sum(random_actions)) * random_actions
+        # random_actions = np.random.rand(self.T)
+        # if np.sum(random_actions) > 0:
+        #     return (self.V / np.sum(random_actions)) * random_actions
+        
         return np.ones(self.T) * (self.V / self.T)
 
     def record_actions(self, full_action_profile):
@@ -218,4 +219,36 @@ def _compute_regret_on_subsequence(player_id, subsequence_indices, game_dict, ov
     formatted_sub_costs[player_id] = sub_costs_player
     
     return get_regrets(game_dict, sub_actions, formatted_sub_costs)[player_id]
+
+def get_last_iterate_strategies(dynamics, overall_actions, context_sequence):
+    """
+    Returns the last-iterate strategies for each player for each of their observable contexts.
+
+    Args:
+        dynamics (ContextualFTLDynamics): The dynamics object after running the simulation.
+        overall_actions (list): The overall_actions output from the run() function.
+        context_sequence (list): The sequence of contexts used in the simulation.
+    """
+    n = dynamics.n
+    T = dynamics.T
+    num_iter = len(context_sequence)
+
+    # Find the last round each algorithm was used for each player
+    last_rounds = {}  # {(player_id, alg_idx): round}
+    for r in range(num_iter):
+        context_id = context_sequence[r]
+        for i in range(n):
+            alg_idx = dynamics.player_context_mapping[i][context_id]
+            last_rounds[(i, alg_idx)] = r
+            
+    last_iterate_strategies = [[] for _ in range(n)]
+    for i in range(n):
+        num_player_algs = len(dynamics.player_algs[i])
+        for alg_idx in range(num_player_algs):
+            if (i, alg_idx) in last_rounds:
+                last_round = last_rounds[(i, alg_idx)]
+                strategy = overall_actions[i][last_round]
+                last_iterate_strategies[i].append(strategy)
+    
+    return last_iterate_strategies
 
