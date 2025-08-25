@@ -82,7 +82,7 @@ def project_feasible(game_dict, z):
     return res.x
 
 
-def extra_gradient_equilibrium(game_dict, eta=None):
+def extra_gradient_equilibrium(game_dict, eta=None, eps=0.0001):
     """ Express the equilibrium solution as a joint variational inequality and use the projected extra gradient
     algorithm with step size eta to solve this. At every step, we do a projected look ahead, and the update the
     current value based on the gradient direction from the projected lookahead.
@@ -91,7 +91,6 @@ def extra_gradient_equilibrium(game_dict, eta=None):
     \eta <= 1/L, where L = nTa+a+b(n+1).
     Note this is different than one in paper - that is a more conservative value used for easier convergence proof.
     """
-    eps = 0.0001
     n, T, Vs = game_dict["n"], game_dict["T"], game_dict["Vs"]
     alpha, beta = game_dict["alpha"], game_dict["beta"]
     M, b = get_linear_operator(game_dict)
@@ -118,9 +117,9 @@ def extra_gradient_equilibrium(game_dict, eta=None):
      
 
 if __name__ == "__main__":
-    n, T, alpha, beta = 15, 500, 2, 1
-    Vs = [20 for i in range(n)]
-    reserve = [5 for i in range(n)]
+    n, T, alpha, beta = 2, 10, 10, 1
+    Vs = [10, 30]
+    reserve = [2000 for i in range(n)]
     supply = [0 for i in range(T)]
 
     game_dict = {
