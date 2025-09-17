@@ -110,7 +110,7 @@ def plot_demand_bayesian(ax, game_dict, demand_matrix, supply, plot_type, plot_y
             v, r = Vs[i,l], reserves[i,l]
             ax.plot(time_steps, to_plot_demand[i][l], linewidth=2,
                 color=colors[i % len(colors)], alpha=(l*0.3 + 0.4),
-                label=(r'\textbf{Agent} ' + f'{i}' + rf' $\theta_{i}=({v},{r:.1f})$')
+                label=(r'\textbf{Agent} ' + f'{i}' + rf' $\theta_{i}=({v})$')
             )
     ax.set_xlabel(r'\textbf{Time}')
     if plot_type == "cumulative" and plot_y_label:
