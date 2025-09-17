@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 from main import find_equilibrium_br, get_cost
-from algorithms import extra_gradient_equilibrium
+from algorithms import extra_gradient_equilibrium, extra_gradient_equilibrium_bayesian
 
 import imageio.v2 as imageio
 import os, re, glob
@@ -89,6 +89,44 @@ def plot_demand(ax, game_dict, demand_matrix, supply, plot_type, plot_y_label=Tr
     ax.grid(True, alpha=0.25)  
 
 
+def plot_demand_bayesian(ax, game_dict, demand_matrix, supply, plot_type, plot_y_label=True):
+    n, k, T = game_dict["n"], game_dict["k"], game_dict["T"]
+    alphas, betas, p_0 = game_dict["alphas"], game_dict["betas"], game_dict["p_0"]
+    Vs = game_dict["Vs"]
+    reserves = game_dict["reserves"]
+    
+    time_steps = np.arange(T)
+
+    colors = ['blue', 'orange']
+    to_plot_demand = demand_matrix
+    to_plot_supply = supply
+
+    if plot_type == "cumulative":
+        to_plot_demand = np.cumsum(demand_matrix, axis=2)
+        to_plot_supply = np.cumsum(supply) 
+   
+    for i in range(n):
+        for l in range(k):
+            v, r = Vs[i,l], reserves[i,l]
+            ax.plot(time_steps, to_plot_demand[i][l], linewidth=2,
+                color=colors[i % len(colors)], alpha=(l*0.3 + 0.4),
+                label=(r'\textbf{Agent} ' + f'{i}' + rf' $\theta_{i}=({v},{r:.1f})$')
+            )
+    ax.set_xlabel(r'\textbf{Time}')
+    if plot_type == "cumulative" and plot_y_label:
+        ax.set_ylabel(r'\textbf{Cumulative Position}') 
+    elif plot_y_label:
+         ax.set_ylabel('Order')
+    
+    alpha = np.min(alphas)
+    beta_min = np.min(betas)
+    beta_max = np.max(betas)
+    ax.set_title(rf'$\alpha={alpha}$, $\beta \in [{beta_min}, {beta_max}]$')
+    ax.set_ylim(-15, 35) # Set y-axis limit
+    ax.legend()
+    ax.grid(True, alpha=0.25)  
+
+
 def plot_equilibrium_strategies(game_dict, demand_matrix, supply, exp_number=None, beta_ab=None, time_ab=None):
     """
     Plot the equilibrium strategies showing:
@@ -168,14 +206,57 @@ def extract_number(filename):
     return int(match.group(1)) if match else -1
 
 
-if __name__ == "__main__":
+def bayesian_experiment():
+    n, k, T = 2, 3, 100
+    supply = [0 for i in range(T)]
+    bayesian_game_dict = {
+        "n" : n,
+        "T" : T,
+        "k" : k,
+        "p_0" : 2,
+        "supply" : supply
+    }
+
+    # Vs and reserves are an n (agent) x k (type) matrix. 
+    Vs = np.array([
+        [10, 15, 20],
+        [20, 25, 30]
+    ])
+    reserves = Vs/3
+    bayesian_game_dict["Vs"] = Vs
+    bayesian_game_dict["reserves"] = reserves
+
+    # key is agent1 type, agent2 type
+    # All that really matters is the expected value of alpha, beta conditioned on the type. Which is what this is
+    alphas, betas, type_dist = np.zeros((k,k)), np.zeros((k,k)), np.zeros((k,k))
+    for l0 in range(k):
+        for l1 in range(k):
+            key = (l0, l1)
+            beta = 0.5*(bayesian_game_dict["Vs"][(0,l0)] + bayesian_game_dict["Vs"][(1,l1)])/200
+            alpha = 0.1
+            alphas[l0, l1] = alpha
+            betas[l0, l1] = beta
+            type_dist[l0, l1] = 1/k**2
+
+    bayesian_game_dict["alphas"] = alphas
+    bayesian_game_dict["type_dist"] = type_dist
+
+    beta_multiplier = [1, 10, 100]
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    for i, mult in enumerate(beta_multiplier):
+        bayesian_game_dict["betas"] = mult*betas
+        demand_matrix = extra_gradient_equilibrium_bayesian(bayesian_game_dict)
+        plot_demand_bayesian(axes[i], bayesian_game_dict, demand_matrix, supply, "cumulative", plot_y_label=(True if i==0 else False))
+    plt.tight_layout()
+    plt.show()
+
+
+def complete_information_experiment():
     # If you're doing cont time:
     # choose discretization = d
     # choose cont_time_interval = c
     # choose T = d*c
     # choose beta*discretization
-
-    
     n, alpha = 5, 0.1
     T = 100
     Vs = [10, 15, 20, 25, 30]
@@ -218,6 +299,10 @@ if __name__ == "__main__":
         plot_price(axes[i], game_dict, demand_matrix, supply, plot_y_label=(True if i==0 else False))
     plt.tight_layout()
     plt.show() 
+
+if __name__ == "__main__":
+    #complete_information_experiment()
+    bayesian_experiment()
 
     # print("Completed generating plots") 
     # image_files = sorted(glob.glob(f'figures/exp{exp_number}_{ablation}/exp{exp_number}_{ablation}_*.png'), key=extract_number)

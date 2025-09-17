@@ -111,7 +111,7 @@ def get_linear_operator_bayesian(game_dict):
     r_p = []
     for i in range(n):
         for l in range(k):
-            r_p.append(p_0 - reserves[(i,l)])
+            r_p.append(p_0 - reserves[i,l])
     c = np.kron(r_p, np.ones(T))  
     return M, c
 
@@ -131,10 +131,11 @@ def project_feasible_analytical_bayesian(game_dict, z):
     Vs = game_dict["Vs"]
     H = z.reshape((n*k,T))
  
-    flat_Vs = []
-    for i in range(n):
-        for l in range(k):
-            flat_Vs.append(Vs[(i,l)])
+    flat_Vs = Vs.reshape(-1)
+    # flat_Vs = []
+    # for i in range(n):
+    #     for l in range(k):
+    #         flat_Vs.append(Vs[(i,l)])
 
     offset = np.maximum(np.sum(H, axis=1) - flat_Vs, np.zeros(n*k)) / T
     H -= offset[:, None]
@@ -248,7 +249,7 @@ def extra_gradient_equilibrium_bayesian(game_dict, eta=None, eps=0.0001):
 
 
 def test_complete_info():
-    n, T, alpha, beta = 2, 5, 10, 1
+    n, T, alpha, beta = 2, 5, 1, 1
     Vs = [10, 30]
     reserve = [2000 for i in range(n)]
     supply = [0 for i in range(T)]
@@ -282,32 +283,19 @@ def test_bayesian_1():
         "p_0" : 2.0,
         "supply" : [0 for i in range(T)]
     }
-
-    # key is agent, agent type
-    bayesian_game_dict["Vs"] = {
-        (0, 0) : 10,
-        (0, 1) : 10,
-        (1, 0) : 30,
-        (1, 1) : 30
-    }
-    bayesian_game_dict["reserves"] = {
-        (0, 0) : 2000,
-        (0, 1) : 2000,
-        (1, 0) : 2000,
-        (1, 1) : 2000
-    }
-
+    Vs = np.array([
+        [10, 10],
+        [30, 30]
+    ])
+    reserves = np.array([
+        [2000, 2000],
+        [2000, 2000]
+    ])
+    bayesian_game_dict["Vs"] = Vs
+    bayesian_game_dict["reserves"] = reserves
+    
     # key is agent1 type, agent2 type
-    alphas, betas, type_dist = np.zeros((k,k)), np.zeros((k,k)), np.zeros((k,k))
-    for l0 in range(k):
-        for l1 in range(k):
-            key = (l0, l1)
-            beta = 1
-            alpha = 10
-            alphas[l0, l1] = alpha
-            betas[l0, l1] = beta
-            type_dist[l0, l1] = 1/k**2
-
+    alphas, betas, type_dist = np.ones((k,k)), np.ones((k,k)), (1/k**2)*np.ones((k,k))
     bayesian_game_dict["alphas"] = alphas
     bayesian_game_dict["betas"] = betas
     bayesian_game_dict["type_dist"] = type_dist
@@ -326,24 +314,14 @@ def test_bayesian_2():
         "supply" : [0 for i in range(T)]
     }
 
-    # key is agent, agent type
-    bayesian_game_dict["Vs"] = {
-        (0, 0) : 10,
-        (0, 1) : 15,
-        (0, 2) : 20,
-        (1, 0) : 20,
-        (1, 1) : 25,
-        (1, 2) : 30
-    }
-    # For linear reserves, all that matters is the expected value of the reserve.
-    bayesian_game_dict["reserves"] = {
-        (0, 0) : bayesian_game_dict["Vs"][(0,0)]/3,
-        (0, 1) : bayesian_game_dict["Vs"][(0,1)]/3,
-        (0, 2) : bayesian_game_dict["Vs"][(0,2)]/3,
-        (1, 0) : bayesian_game_dict["Vs"][(1,0)]/3,
-        (1, 1) : bayesian_game_dict["Vs"][(1,1)]/3,
-        (1, 2) : bayesian_game_dict["Vs"][(1,2)]/3
-    }
+    # Vs and reserves are an n (agent) x k (type) matrix. 
+    Vs = np.array([
+        [10, 15, 20],
+        [20, 25, 30]
+    ])
+    reserves = Vs/3
+    bayesian_game_dict["Vs"] = Vs
+    bayesian_game_dict["reserves"] = reserves
 
     # key is agent1 type, agent2 type
     # All that really matters is the expected value of alpha, beta conditioned on the type. Which is what this is
@@ -375,24 +353,17 @@ def test_bayesian_3():
         "supply" : [0 for i in range(T)]
     }
 
-    # key is agent, agent type
-    bayesian_game_dict["Vs"] = {
-        (0, 0) : 10,
-        (0, 1) : 15,
-        (0, 2) : 20,
-        (1, 0) : 20,
-        (1, 1) : 25,
-        (1, 2) : 30
-    }
-    # For linear reserves, all that matters is the expected value of the reserve.
-    bayesian_game_dict["reserves"] = {
-        (0, 0) : 1000,
-        (0, 1) : 1000,
-        (0, 2) : 1000,
-        (1, 0) : 1000,
-        (1, 1) : 1000,
-        (1, 2) : 1000
-    }
+    # Vs and reserves are an n (agent) x k (type) matrix. 
+    Vs = np.array([
+        [10, 15, 20],
+        [20, 25, 30]
+    ])
+    reserves = np.array([
+        [1000, 1000, 1000],
+        [1000, 1000, 1000]
+    ]) 
+    bayesian_game_dict["Vs"] = Vs
+    bayesian_game_dict["reserves"] = reserves
 
     # key is agent1 type, agent2 type
     # All that really matters is the expected value of alpha, beta conditioned on the type. Which is what this is
@@ -415,9 +386,10 @@ def test_bayesian_3():
         for l in range(k):
             total = np.sum(out[i][l])
             print(f"Total bought by agent {i} of type {l} is: {total}")
+    return out
 
 
 if __name__ == "__main__":
-    #test_complete_info()
-    #test_bayesian_2()
-    test_bayesian_3()
+    test_complete_info()
+    test_bayesian_1()
+    #test_bayesian_3()
