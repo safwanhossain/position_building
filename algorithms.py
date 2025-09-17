@@ -117,12 +117,15 @@ def get_linear_operator_bayesian(game_dict):
 
 
 def project_feasible_analytical(game_dict, z):
+    # Assume constraints of the form -V <= \sum{hit} <= V
     n, T = game_dict["n"], game_dict["T"]
-    Vs = game_dict["Vs"]
+    Vs = np.array(game_dict["Vs"])
     H = z.reshape((n,T))
  
-    offset = np.maximum(np.sum(H, axis=1) - Vs, np.zeros(n)) / T
-    H -= offset[:, None]
+    offset_minus = np.maximum(np.sum(H, axis=1) - Vs, np.zeros(n)) / T
+    H -= offset_minus[:, None]
+    offset_plus = np.maximum(-1*Vs - np.sum(H, axis=1), np.zeros(n)) / T
+    H += offset_plus[:, None]
     return H.flatten()
 
 
@@ -130,15 +133,13 @@ def project_feasible_analytical_bayesian(game_dict, z):
     n, k, T = game_dict["n"], game_dict["k"], game_dict["T"]
     Vs = game_dict["Vs"]
     H = z.reshape((n*k,T))
- 
     flat_Vs = Vs.reshape(-1)
-    # flat_Vs = []
-    # for i in range(n):
-    #     for l in range(k):
-    #         flat_Vs.append(Vs[(i,l)])
 
-    offset = np.maximum(np.sum(H, axis=1) - flat_Vs, np.zeros(n*k)) / T
-    H -= offset[:, None]
+    offset_minus = np.maximum(np.sum(H, axis=1) - flat_Vs, np.zeros(n*k)) / T
+    H -= offset_minus[:, None]
+    offset_plus = np.maximum(-1*flat_Vs - np.sum(H, axis=1), np.zeros(n*k)) / T
+    H += offset_plus[:, None]
+
     return H.flatten()
 
 
