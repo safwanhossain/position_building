@@ -75,7 +75,7 @@ def plot_demand(ax, game_dict, demand_matrix, supply, plot_type, plot_y_label=Tr
     for i in range(n):
         ax.plot(time_steps, to_plot_demand[i], linewidth=2,
             color=colors[i % len(colors)],
-            label=(r'\textbf{Trader} ' + f'{i}' + r' \textbf{(V=}' + rf'{Vs[i]}' + r'\textbf{)}')
+            label=(r'\textbf{Agent} ' + f'{i}' + r' \textbf{(V=}' + rf'{Vs[i]}' + r'\textbf{)}')
         )
     ax.plot(time_steps, to_plot_supply, linewidth=2, linestyle=":", color=colors[-1], label=r"\textbf{Noise Agent}")
     ax.set_xlabel(r'\textbf{Time}')
@@ -110,7 +110,7 @@ def plot_demand_bayesian(ax, game_dict, demand_matrix, supply, plot_type, plot_y
             v, r = Vs[i,l], reserves[i,l]
             ax.plot(time_steps, to_plot_demand[i][l], linewidth=2,
                 color=colors[i % len(colors)], alpha=(l*0.3 + 0.4),
-                label=(r'\textbf{Agent} ' + f'{i}' + rf' $\theta_{i}=({v})$')
+                label=(r'\textbf{Agent} ' + f'{i}' + rf'; $\theta_{i}={v}$')
             )
     ax.set_xlabel(r'\textbf{Time}')
     if plot_type == "cumulative" and plot_y_label:
@@ -222,7 +222,10 @@ def bayesian_experiment():
         [10, 15, 20],
         [20, 25, 30]
     ])
-    reserves = Vs/3
+    reserves = np.array([
+        [3, 5, 7],
+        [6, 8, 10]
+    ]) 
     bayesian_game_dict["Vs"] = Vs
     bayesian_game_dict["reserves"] = reserves
 
@@ -301,8 +304,8 @@ def complete_information_experiment():
     plt.show() 
 
 if __name__ == "__main__":
-    #complete_information_experiment()
-    bayesian_experiment()
+    complete_information_experiment()
+    #bayesian_experiment()
 
     # print("Completed generating plots") 
     # image_files = sorted(glob.glob(f'figures/exp{exp_number}_{ablation}/exp{exp_number}_{ablation}_*.png'), key=extract_number)
