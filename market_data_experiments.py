@@ -10,7 +10,7 @@ plt.rcParams['text.usetex'] = True
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = ['Computer Modern Roman'] # Or other serif fonts
 
-PANDAS_FOLDER_NAME = "real_data"
+PANDAS_FOLDER_NAME = "market_data"
 
 def convert_bid_ask_data_to_pd(bid_files, ask_files, save_file_name):
     """ Given the bid and ask data files, (1) create a pandas data frame and save it
