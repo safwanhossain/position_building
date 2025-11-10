@@ -206,7 +206,7 @@ def regress_beta_from_excess_volume(train_data, test_data, use_open_close=True, 
     def get_excess_demand(data, pred_window):
         # We want to predict ask-bid spread from the excess demand: spread = beta*(excess_volume)
         # Our independent variable is the excess demand.
-        excess_demand = data["bid_volume"] - data["ask_volume"]
+        excess_demand = -1 * (data["bid_volume"] - data["ask_volume"])
         excess_demand = excess_demand.iloc[0:-1]            # the element can be used to predict
         excess_demand = excess_demand.rolling(window=pred_window).mean().shift(-pred_window+1)
         excess_demand = excess_demand.iloc[0:-pred_window]
@@ -271,10 +271,13 @@ if __name__ == "__main__":
     train_start_date = "2025-10-07"
     train_end_date = "2025-10-08"
     train_date_list = [date.strftime("%Y-%m-%d") for date in pd.date_range(start=train_start_date, end=train_end_date, freq='D')]
+    print("dates in train set: ", train_date_list)
     
-    test_start_date = "2025-10-09"
+    test_start_date = "2025-10-10"
     test_end_date = "2025-10-10"
     test_date_list = [date.strftime("%Y-%m-%d") for date in pd.date_range(start=test_start_date, end=test_end_date, freq='D')]
+    print("dates in test set: ", test_date_list)
+
 
     if EXPERIMENT == "EUR_USD_Second":
         data_folder = "data_second/EUR_USD"
@@ -284,13 +287,13 @@ if __name__ == "__main__":
         bid_files = [os.path.join(data_dir, bid_file) for bid_file in bid_files]
         ask_files = [f"EUR-USD_Second_{date}_12h-18h_UTC_ask.csv" for date in train_date_list]
         ask_files = [os.path.join(data_dir, ask_file) for ask_file in ask_files]
-        train_data = convert_bid_ask_data_to_pd(bid_files, ask_files, "EUR_USD_second_train")
+        train_data = convert_bid_ask_data_to_pd(bid_files, ask_files, f"EUR_USD_second_train_{train_start_date}_to_{train_end_date}")
 
         bid_files = [f"EUR-USD_Second_{date}_12h-18h_UTC_bid.csv" for date in test_date_list]
         bid_files = [os.path.join(data_dir, bid_file) for bid_file in bid_files]
         ask_files = [f"EUR-USD_Second_{date}_12h-18h_UTC_ask.csv" for date in test_date_list]
         ask_files = [os.path.join(data_dir, ask_file) for ask_file in ask_files]
-        test_data = convert_bid_ask_data_to_pd(bid_files, ask_files, "EUR_USD_second_test")
+        test_data = convert_bid_ask_data_to_pd(bid_files, ask_files, f"EUR_USD_second_test_{test_start_date}_to_{test_end_date}")
     elif EXPERIMENT == "USD_CAD_Minute":
         data_folder = "data_minute/USD_CAD"
         data_dir = os.path.join(PANDAS_FOLDER_NAME, data_folder)
@@ -299,27 +302,27 @@ if __name__ == "__main__":
         bid_files = [os.path.join(data_dir, bid_file) for bid_file in bid_files]
         ask_files = [f"USD-CAD_Minute_{date}_UTC_ask.csv" for date in train_date_list]
         ask_files = [os.path.join(data_dir, ask_file) for ask_file in ask_files]
-        train_data = convert_bid_ask_data_to_pd(bid_files, ask_files, "USD_CAD_minute_train")
+        train_data = convert_bid_ask_data_to_pd(bid_files, ask_files, f"USD_CAD_minute_train_{train_start_date}_to_{train_end_date}")
 
         bid_files = [f"USD-CAD_Minute_{date}_UTC_bid.csv" for date in test_date_list]
         bid_files = [os.path.join(data_dir, bid_file) for bid_file in bid_files]
         ask_files = [f"USD-CAD_Minute_{date}_UTC_ask.csv" for date in test_date_list]
         ask_files = [os.path.join(data_dir, ask_file) for ask_file in ask_files]
-        test_data = convert_bid_ask_data_to_pd(bid_files, ask_files, "USD_CAD_minute_test")
+        test_data = convert_bid_ask_data_to_pd(bid_files, ask_files, f"USD_CAD_minute_test_{test_start_date}_to_{test_end_date}")
 
     # regress alpha and beta
     window = 1
     plot = True
     alpha, alpha_p_val, alpha_r_squared, alpha_test_r_squared = regress_alpha_from_excess_volume(train_data, test_data, use_open_close=False, pred_window=window, plot=plot)
     print(f"Alpha: {alpha}, alpha_p_val: {alpha_p_val}, alpha_r_sq: {alpha_r_squared}, alpha_test_r_sq: {alpha_test_r_squared}")
-    beta, beta_p_val, beta_r_squared, beta_test_r_squared = regress_beta_from_excess_volume(train_data, test_data, use_open_close=False, pred_window=window, plot=False)
+    beta, beta_p_val, beta_r_squared, beta_test_r_squared = regress_beta_from_excess_volume(train_data, test_data, use_open_close=False, pred_window=window, plot=plot)
     print(f"Beta: {beta}, beta_p_val: {beta_p_val}, beta_r_sq: {beta_r_squared}, beta_test_r_sq: {beta_test_r_squared}")
 
     # regress alpha and beta for different windows
     for window in range(2, 50):
-        alpha, alpha_p_val, alpha_r_squared = regress_alpha_from_excess_volume(data, use_open_close=False, pred_window=window, plot=False)
-        beta, beta_p_val, beta_r_squared = regress_beta_from_excess_volume(data, use_open_close=False, pred_window=window, plot=False)
+        alpha, alpha_p_val, alpha_r_squared, alpha_test_r_squared = regress_alpha_from_excess_volume(train_data, test_data, use_open_close=False, pred_window=window, plot=False)
+        beta, beta_p_val, beta_r_squared, beta_test_r_squared = regress_beta_from_excess_volume(train_data, test_data, use_open_close=False, pred_window=window, plot=False)
         print(f"Window: {window} =================================")
-        print(f"Alpha: {alpha}, alpha_p_val: {alpha_p_val}, alpha_r_sq: {alpha_r_squared}, Beta: {beta}, beta_p_val: {beta_p_val}, beta_r_sq: {beta_r_squared}")
+        print(f"Alpha: {alpha}, alpha_p_val: {alpha_p_val}, alpha_r_sq: {alpha_r_squared}, alpha_test_r_sq: {alpha_test_r_squared}, Beta: {beta}, beta_p_val: {beta_p_val}, beta_r_sq: {beta_r_squared}, beta_test_r_sq: {beta_test_r_squared}")
 
 
