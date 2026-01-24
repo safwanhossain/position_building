@@ -16,49 +16,13 @@ from typing import Dict, List, Optional, Tuple, Callable, Any
 import numpy as np
 from copy import deepcopy
 
-@dataclass
-class State:
-    """
-    State representation for the Markov Game.
-    
-    Attributes:
-        positions: Current cumulative position h_i for each agent i
-        price: Current market price p
-        exogenous_supply: Current exogenous and instanteneous supply s
-        alpha: Current price impact parameter (permanent impact)
-        beta: Current price impact parameter (temporary impact)
-    """  
-    positions: np.ndarray  # shape: (n_agents,)
-    price: float
-    exogenous_supply: float
-    alpha: float
-    beta: float
-    time: int
-    horizon: int
-    
-    def copy(self) -> 'State':
-        """Create a deep copy of the state."""
-        return State(
-            positions=self.positions.copy(),
-            price=self.price,
-            exogenous_supply=self.exogenous_supply,
-            alpha=self.alpha,
-            beta=self.beta,
-            time=self.time,
-            horizon=self.horizon
-        )
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert state to dictionary representation."""
-        return {
-            'positions': self.positions.copy(),
-            'price': self.price,
-            'exogenous_supply': self.exogenous_supply,
-            'alpha': self.alpha,
-            'beta': self.beta,
-            'time': self.time,
-            'horizon': self.horizon
-        }
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.distributions import Normal
+
+from policy import Policy, UniformPolicy, DeepPolicy, PolicyGradient
+from state import State
 
 
 class TransitionDistribution(ABC):
@@ -125,76 +89,6 @@ class IndependentGaussianTransition(TransitionDistribution):
         return self.alpha_mean, self.beta_mean, self.s_mean
 
 
-class ARGaussianTransition(TransitionDistribution):
-    """
-    Gaussian transition with AR(1) dynamics for each parameter.
-    The AR(1) model assumes that the current value is a linear combination of the past value
-    plus some noise term. 
-
-    So X_{t+1} = a_0 + a_1*X_t + ε. Here X can be alpha, beta or supply.
-    where ε ~ N(0, σ²)
-
-    TODO: Implement this properly
-    """
-    
-    def __init__(
-        self,
-        mean_alpha: float = 0.1,
-        mean_beta: float = 0.01,
-        mean_supply: float = 0.0,
-        persistence_alpha: float = 0.9,
-        persistence_beta: float = 0.9,
-        persistence_supply: float = 0.8,
-        std_alpha: float = 0.01,
-        std_beta: float = 0.001,
-        std_supply: float = 1.0
-    ):
-        self.mean_alpha = mean_alpha
-        self.mean_beta = mean_beta
-        self.mean_supply = mean_supply
-        self.persistence_alpha = persistence_alpha
-        self.persistence_beta = persistence_beta
-        self.persistence_supply = persistence_supply
-        self.std_alpha = std_alpha
-        self.std_beta = std_beta
-        self.std_supply = std_supply
-    
-    def sample(self, state: State):
-        pass
-
-    def get_mean(self, state: State) -> Tuple[float, float, float]:
-        pass
-
-    # def sample(self, state: State, rng: np.random.Generator) -> Tuple[float, float, float]:
-    #     alpha_next = (
-    #         self.mean_alpha + 
-    #         self.persistence_alpha * (state.alpha - self.mean_alpha) +
-    #         rng.normal(0, self.std_alpha)
-    #     )
-    #     beta_next = (
-    #         self.mean_beta + 
-    #         self.persistence_beta * (state.beta - self.mean_beta) +
-    #         rng.normal(0, self.std_beta)
-    #     )
-    #     supply_next = (
-    #         self.mean_supply + 
-    #         self.persistence_supply * (state.exogenous_supply - self.mean_supply) +
-    #         rng.normal(0, self.std_supply)
-    #     )
-        
-    #     # Ensure α, β are positive
-    #     alpha_next = max(alpha_next, 1e-6)
-    #     beta_next = max(beta_next, 1e-6)
-        
-    #     return alpha_next, beta_next, supply_next
-    
-    # def get_mean(self, state: State) -> Tuple[float, float, float]:
-    #     alpha_next = self.mean_alpha + self.persistence_alpha * (state.alpha - self.mean_alpha)
-    #     beta_next = self.mean_beta + self.persistence_beta * (state.beta - self.mean_beta)
-    #     supply_next = self.mean_supply + self.persistence_supply * (state.exogenous_supply - self.mean_supply)
-    #     return alpha_next, beta_next, supply_next
-
-
 class Constraint(ABC):
     """Abstract base class for feasibility constraints G_i."""
     
@@ -251,30 +145,7 @@ class ReserveUtility(UtilityFunction):
     def gradient(self, cum_position: float) -> float:
         return self.reserve_price
 
-class Policy(ABC):
-    """
-    Abstract base class for agent policy functions \pi(a_i | \omega).
-    """
-    @abstractmethod
-    def __call__(self, curr_state: State) -> float:
-        """Return the sampled action from that state"""
-        pass
 
-class UniformPolicy(Policy):
-    def __init__(self, utility_func, constraint, agent_id):
-        self.utility_func = utility_func
-        self.constraint = constraint
-        self.agent_id = agent_id
-        pass
-
-    def __call__(self, curr_state: State) -> float:
-        # Buy a uniform amount if the price is below reserve.
-        # Don't buy anything if the price is above reserve
-        if curr_state.price > self.utility_func.gradient(curr_state.positions[self.agent_id]):
-            return 0
-    
-        horizon = curr_state.horizon
-        return self.constraint.h_max / curr_state.horizon
 
 class OptimalExecutionEnv:
     """
@@ -538,82 +409,22 @@ class OptimalExecutionEnv:
     
 
     def run(self):
+        """ This just runs the environment for a given policy.
+        This does not train anything! Feel free to use this for debugging
+        for to run an already trained policy.
+        """
         self.curr_episode = 0
         for episode in range(self.max_episodes):
             self.reset()
             for time in range(self.horizon):
                 actions = np.zeros(self.n_agents)
                 for i in range(self.n_agents):
-                    actions[i] = self.policies[i](self.current_state)
-                prev_state = self.current_state
+                    action, prob = self.policies[i](self.current_state)
+                    print(action, prob)
+                    exit(0)
+                    actions[i] = action
                 next_state, rewards, terminated, info = self.step(actions)
 
             assert terminated is True
             print(f"Episode {episode} had agents achieve cumulative reward: {self.episode_rewards[episode]}")
             self.curr_episode += 1
-
-
-def create_default_environment(
-    n_agents: int = 3,
-    horizon: int = 10,
-    max_episodes: int = 1,
-    seed: Optional[int] = None
-) -> OptimalExecutionEnv:
-    """
-    Create a default environment with standard parameters for testing.
-    
-    Args:
-        n_agents: Number of agents
-        horizon: Episode horizon
-        seed: Random seed
-        
-    Returns:
-        Configured OptimalExecutionEnv instance
-    """
-    # Create utility functions (different targets for each agent)
-    utilities = [
-        ReserveUtility(i) 
-        for i in range(4, 4+n_agents)
-    ]
-    
-    # Create feasibility constraints
-    constraints = [
-        BoxConstraint(min_pos=0, max_pos=10+(i*5)) 
-        for i in range(n_agents)
-    ]
-    
-    # Create transition distribution
-    transition = ConstantTransition(mean=0, std=0.5)
-    
-    # Create initial state
-    initial_state = State(
-        positions=np.zeros(n_agents),
-        price=2.0,
-        exogenous_supply=0.0,
-        alpha=0.1,
-        beta=0.1,
-        time=0,
-        horizon=horizon
-    )
-
-    # Create the naive policy class
-    policies = [
-        UniformPolicy(utilities[i], constraints[i], i) for i in range(n_agents) 
-    ]
-    
-    # Create environment
-    env = OptimalExecutionEnv(
-        n_agents=n_agents,
-        utility_functions=utilities,
-        feasibility_constraints=constraints,
-        transition_distribution=transition,
-        initial_state=initial_state,
-        max_episodes=max_episodes,
-        horizon=horizon,
-        policies=policies,
-        discount_factor=0.99,
-    )
-    env.run()
-
-if __name__ == "__main__":
-    create_default_environment()

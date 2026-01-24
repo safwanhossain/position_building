@@ -107,12 +107,16 @@ def get_linear_operator_bayesian(game_dict):
                         #print(f"i={i}, j={j}, l_i={l_i}, l_j:{l_j}: prob:{prob}, A:\n{A}")
     
     # construct the c vector
-    # Expected supply will be 0; so we can ignore 
+    # We assume supply is the same for all types - i.e. no distribution
+    B = -alpha*np.tril(np.ones((T, T))) - beta*np.eye(T)
+    supp = np.matmul(B, supply)
+    supp_kron = np.kron(np.ones(n*k), supp)
+    
     r_p = []
     for i in range(n):
         for l in range(k):
             r_p.append(p_0 - reserves[i,l])
-    c = np.kron(r_p, np.ones(T))  
+    c = np.kron(r_p, np.ones(T)) + supp_kron
     return M, c
 
 
@@ -191,27 +195,40 @@ def extra_gradient_equilibrium(game_dict, eta=None, eps=0.0001):
     """
     n, T, Vs = game_dict["n"], game_dict["T"], game_dict["Vs"]
     alpha, beta = game_dict["alpha"], game_dict["beta"]
+    vwap_volume = game_dict["vwap_volume"] if "vwap_volume" in game_dict else [1 for i in range(T)]
+    fixed_agents = game_dict["vwap_players"] if "vwap_players" in game_dict else []
+
     M, b = get_linear_operator(game_dict)
-    initial_guess = np.concatenate([[Vs[i]/T for t in range(T)] for i in range(n)])
+    # Initial guess will be VWAP
+    vwap_weight = [val/sum(vwap_volume) for val in vwap_volume]
+    initial_guess = np.concatenate([[Vs[i] * vwap_weight[t] for t in range(T)] for i in range(n)])
     L = (n*T + 1)*alpha + (n+1)*beta
     if eta is None:
         eta = 0.98/L
     else:
         assert eta <= 1/L
         
+    # The fixed agents will play their Vwap strategy. So do not update them ...
     prev_x, curr_x = np.zeros(n*T), initial_guess
     while np.linalg.norm(prev_x-curr_x) >= eps:
         prev_x = curr_x.copy()
         f_prev = np.matmul(M, prev_x) + b
         lookahead_x = prev_x - eta*f_prev
         lookahead_x = project_feasible_analytical(game_dict, lookahead_x)
-        
         f_lookahead = np.matmul(M, lookahead_x) + b
-        curr_x = prev_x - eta*f_lookahead
+
+        # Only update the agents that are not fixed
+        if len(fixed_agents) == 0:
+            curr_x = prev_x - eta*f_lookahead
+        else:
+            for i in range(n):
+                if i not in fixed_agents:
+                    curr_x[i*T:(i+1)*T] = prev_x[i*T:(i+1)*T] - eta*f_lookahead[i*T:(i+1)*T]
         curr_x = project_feasible_analytical(game_dict, curr_x)
     
     equi_demand = curr_x.reshape(n, T)
     return equi_demand
+     
      
 
 def extra_gradient_equilibrium_bayesian(game_dict, eta=None, eps=0.0001):
