@@ -180,6 +180,51 @@ def plot_demand_bayesian(ax, game_dict, demand_matrix, supply, plot_type, real_w
     ax.grid(True, alpha=0.25)  
 
 
+def plot_demand_bayesian_last_iterate(ax, game_dict, demand_matrix_last_iterate, demand_matrix_BNE, supply, plot_type, plot_y_label=True):
+    n, k, T = game_dict["n"], game_dict["k"], game_dict["T"]
+    alphas, betas, p_0 = game_dict["alphas"], game_dict["betas"], game_dict["p_0"]
+    Vs = game_dict["Vs"]
+    reserves = game_dict["reserves"]
+    
+    time_steps = np.arange(T)
+
+    colors = ['blue', 'orange']
+    to_plot_demand_last_iterate = demand_matrix_last_iterate
+    to_plot_demand_BNE = demand_matrix_BNE
+    to_plot_supply = supply
+
+    if plot_type == "cumulative":
+        to_plot_demand_last_iterate = np.cumsum(demand_matrix_last_iterate, axis=2)
+        to_plot_demand_BNE = np.cumsum(demand_matrix_BNE, axis=2)
+        to_plot_supply = np.cumsum(supply) 
+   
+    for i in range(n):
+        for l in range(k):
+            v, r = Vs[i,l], reserves[i,l]
+            ax.plot(time_steps, to_plot_demand_last_iterate[i][l], linewidth=2,
+                color=colors[i % len(colors)], alpha=(l*0.3 + 0.4),
+                label=(r'\textbf{Agent} ' + f'{i+1}' + rf' $\theta_{i}={v}$ (Last It.)')
+            )
+            ax.plot(time_steps, to_plot_demand_BNE[i][l], '--', linewidth=2,
+                color=colors[i % len(colors)], alpha=(l*0.3 + 0.4),
+                label=(r'\textbf{Agent} ' + f'{i+1}' + rf' $\theta_{i}={v}$ (BNE)')
+            )
+    ax.set_xlabel(r'\textbf{Time}', fontsize=18)
+    if plot_type == "cumulative" and plot_y_label:
+        ax.set_ylabel(r'\textbf{Cumulative Position}', fontsize=18) 
+    elif plot_y_label:
+         ax.set_ylabel('Order', fontsize=18)
+    
+    alpha = np.min(alphas)
+    beta_min = np.min(betas)
+    beta_max = np.max(betas)
+    # ax.set_title(rf'$\alpha={alpha}$, $\beta \in [{beta_min}, {beta_max}]$')
+    ax.set_ylim(-15, 35) # Set y-axis limit
+    # ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    # ax.legend()
+    ax.grid(True, alpha=0.25) 
+
+
 def plot_equilibrium_strategies(game_dict, demand_matrix, supply, exp_number=None, beta_ab=None, time_ab=None):
     """
     Plot the equilibrium strategies showing:
